@@ -39,5 +39,6 @@ app.use("/", require("./routes/cart.routes"));
 app.use("/", require("./routes/order.routes"));
 app.use("/", require("./routes/payment.routes"));
 app.use("/", require("./routes/invoice.routes"));
+app.use("/", require("./routes/subscription.routes"));
 
 module.exports = app;
