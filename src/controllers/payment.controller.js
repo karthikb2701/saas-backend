@@ -112,6 +112,9 @@ exports.verifyPayment = async (req, res) => {
     // 5️⃣ Generate PDF (streamed on download)
     // We only generate when user downloads, so no file storage here
 
+    console.log("Tenant:", req.tenantId);
+    console.log("Plan:", planId);
+
     res.json({
       success: true,
       invoiceId: invoice.id,
