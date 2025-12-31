@@ -43,6 +43,10 @@ exports.createOrder = async (req, res) => {
  * VERIFY PAYMENT + ACTIVATE SUBSCRIPTION + CREATE INVOICE
  */
 exports.verifyPayment = async (req, res) => {
+  console.log("🔥 VERIFY PAYMENT HIT");
+  console.log("BODY:", req.body);
+  console.log("TENANT ID:", req.tenantId);
+
   try {
     const {
       razorpay_order_id,
@@ -59,69 +63,57 @@ exports.verifyPayment = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
+      console.log("❌ SIGNATURE MISMATCH");
       return res.status(400).json({ message: "Payment verification failed" });
     }
 
-    // 2️⃣ Get plan details
-    const planRes = await pool.query(
-      "SELECT id, name, price FROM subscription_plans WHERE id=$1",
-      [planId]
-    );
+    console.log("✅ Signature verified");
 
-    if (planRes.rowCount === 0) {
-      return res.status(404).json({ message: "Plan not found" });
+    // 2️⃣ Check tenantId
+    if (!req.tenantId) {
+      console.log("❌ TENANT ID MISSING");
+      return res.status(400).json({ message: "Tenant missing" });
     }
 
-    const plan = planRes.rows[0];
+    // 3️⃣ Insert subscription
+    console.log("➡️ Inserting subscription");
 
-    // 3️⃣ Activate / update subscription
     const subRes = await pool.query(
       `
       INSERT INTO subscriptions (tenant_id, plan_id, status)
       VALUES ($1, $2, 'ACTIVE')
-      ON CONFLICT (tenant_id)
-      DO UPDATE SET plan_id=$2, status='ACTIVE'
-      RETURNING id
+      RETURNING *
       `,
       [req.tenantId, planId]
     );
 
-    const subscriptionId = subRes.rows[0].id;
+    console.log("✅ Subscription inserted:", subRes.rows[0]);
 
-    // 4️⃣ Create invoice record
+    // 4️⃣ Insert invoice
     const invoiceNumber = `INV-${Date.now()}`;
 
-    const invoiceRes = await pool.query(
+    console.log("➡️ Inserting invoice");
+
+    const invRes = await pool.query(
       `
       INSERT INTO invoices (
         tenant_id,
         subscription_id,
         invoice_number,
         amount,
-        currency,
         status
       )
-      VALUES ($1, $2, $3, $4, 'INR', 'PAID')
+      VALUES ($1, $2, $3, 999, 'PAID')
       RETURNING *
       `,
-      [req.tenantId, subscriptionId, invoiceNumber, plan.price]
+      [req.tenantId, subRes.rows[0].id, invoiceNumber]
     );
 
-    const invoice = invoiceRes.rows[0];
+    console.log("✅ Invoice inserted:", invRes.rows[0]);
 
-    // 5️⃣ Generate PDF (streamed on download)
-    // We only generate when user downloads, so no file storage here
-
-    console.log("Tenant:", req.tenantId);
-    console.log("Plan:", planId);
-
-    res.json({
-      success: true,
-      invoiceId: invoice.id,
-      message: "Payment verified, subscription activated",
-    });
+    res.json({ success: true });
   } catch (err) {
-    console.error("Verify payment error:", err);
-    res.status(500).json({ message: "Payment verification failed" });
+    console.error("🔥 VERIFY PAYMENT ERROR:", err);
+    res.status(500).json({ message: "Internal error during payment verify" });
   }
 };
