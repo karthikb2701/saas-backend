@@ -91,21 +91,32 @@ exports.verifyPayment = async (req, res) => {
 
     // 3️⃣ Transaction: subscription + invoice
     await prisma.$transaction(async (tx) => {
-      // 🔹 Upsert subscription
-      const subscription = await tx.subscription.upsert({
+      // 🔹 Check if subscription exists
+      let subscription = await tx.subscription.findUnique({
         where: { tenantId: req.tenantId },
-        update: {
-          planId,
-          status: "ACTIVE",
-          startDate: new Date(),
-        },
-        create: {
-          tenantId: req.tenantId,
-          planId,
-          status: "ACTIVE",
-          startDate: new Date(),
-        },
       });
+
+      if (subscription) {
+        // Update existing subscription
+        subscription = await tx.subscription.update({
+          where: { tenantId: req.tenantId },
+          data: {
+            planId,
+            status: "ACTIVE",
+            startDate: new Date(),
+          },
+        });
+      } else {
+        // Create new subscription
+        subscription = await tx.subscription.create({
+          data: {
+            tenantId: req.tenantId,
+            planId,
+            status: "ACTIVE",
+            startDate: new Date(),
+          },
+        });
+      }
 
       // 🔹 Create invoice
       await tx.invoice.create({
