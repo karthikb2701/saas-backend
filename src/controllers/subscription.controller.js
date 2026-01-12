@@ -1,29 +1,39 @@
-const pool = require("../config/db");
+const prisma = require("../lib/prisma");
 
 exports.getMySubscription = async (req, res) => {
-  const tenantId = req.tenantId;
+  try {
+    const tenantId = req.tenantId;
 
-  const result = await pool.query(
-    `
-    SELECT sp.name, sp.price, sp.order_limit
-    FROM subscriptions s
-    JOIN subscription_plans sp ON sp.id = s.plan_id
-    WHERE s.tenant_id = $1 AND s.status = 'ACTIVE'
-    `,
-    [tenantId]
-  );
+    const subscription = await prisma.subscription.findUnique({
+      where: { tenantId },
+      include: { plan: true },
+    });
 
-  if (result.rowCount === 0) {
-    return res.json({ name: "FREE", price: 0, order_limit: 20 });
+    if (!subscription || subscription.status !== "ACTIVE") {
+      return res.json({ name: "FREE", price: 0, orderLimit: 20 });
+    }
+
+    res.json({
+      name: subscription.plan.name,
+      price: subscription.plan.price,
+      orderLimit: subscription.plan.orderLimit,
+    });
+  } catch (err) {
+    console.error("Get subscription error:", err);
+    res.status(500).json({ message: "Failed to fetch subscription" });
   }
-
-  res.json(result.rows[0]);
 };
 
 exports.getPlans = async (req, res) => {
-  const result = await pool.query(
-    "SELECT id, name, price, order_limit FROM subscription_plans ORDER BY price"
-  );
+  try {
+    const plans = await prisma.subscriptionPlan.findMany({
+      orderBy: { price: "asc" },
+    });
 
-  res.json({ plans: result.rows });
+    res.json({ plans });
+  } catch (err) {
+    console.error("Get plans error:", err);
+    res.status(500).json({ message: "Failed to fetch plans" });
+  }
 };
+

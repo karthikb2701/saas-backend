@@ -14,6 +14,12 @@ exports.createOrder = async (req, res) => {
   try {
     const { planId } = req.body;
 
+    if (!planId) {
+      return res.status(400).json({ message: "Plan ID is required" });
+    }
+
+    console.log("🔥 CREATE ORDER HIT - planId:", planId);
+
     const plan = await prisma.subscriptionPlan.findUnique({
       where: { id: planId },
     });
@@ -22,15 +28,30 @@ exports.createOrder = async (req, res) => {
       return res.status(404).json({ message: "Plan not found" });
     }
 
+    console.log("Plan found:", plan);
+
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      console.error("🔥 Missing Razorpay credentials");
+      return res.status(500).json({
+        message: "Payment gateway not configured",
+        error: "Missing Razorpay credentials",
+      });
+    }
+
     const order = await razorpay.orders.create({
       amount: plan.price * 100, // paise
       currency: "INR",
     });
 
+    console.log("✅ Order created successfully:", order.id);
     res.json(order);
   } catch (err) {
-    console.error("Create order error:", err);
-    res.status(500).json({ message: "Failed to create payment order" });
+    console.error("🔥 Create order error:", err.message);
+    console.error("Full error:", err);
+    res.status(500).json({
+      message: "Failed to create payment order",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
   }
 };
 
