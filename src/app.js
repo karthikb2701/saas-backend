@@ -40,6 +40,14 @@ app.use("/", require("./routes/order.routes"));
 app.use("/", require("./routes/payment.routes"));
 app.use("/", require("./routes/invoice.routes"));
 app.use("/", require("./routes/subscription.routes"));
-app.use("/", require("./routes/invoice.routes"));
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error("🔥 Global error:", err);
+  res.status(err.status || 500).json({
+    message: err.message || "Internal Server Error",
+    error: process.env.NODE_ENV === "development" ? err : undefined,
+  });
+});
 
 module.exports = app;

@@ -2,10 +2,21 @@ const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const prisma = require("../lib/prisma");
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// Initialize Razorpay with fallback values to prevent errors at module load
+let razorpay;
+
+try {
+  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+    razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+  } else {
+    console.warn("⚠️  Razorpay credentials not configured");
+  }
+} catch (error) {
+  console.error("❌ Failed to initialize Razorpay:", error.message);
+}
 
 /**
  * CREATE RAZORPAY ORDER
@@ -20,6 +31,15 @@ exports.createOrder = async (req, res) => {
 
     console.log("🔥 CREATE ORDER HIT - planId:", planId);
 
+    // Check if Razorpay is initialized
+    if (!razorpay) {
+      console.error("🔥 Razorpay not initialized");
+      return res.status(500).json({
+        message: "Payment gateway not configured",
+        error: "Razorpay not initialized",
+      });
+    }
+
     const plan = await prisma.subscriptionPlan.findUnique({
       where: { id: planId },
     });
@@ -29,14 +49,6 @@ exports.createOrder = async (req, res) => {
     }
 
     console.log("Plan found:", plan);
-
-    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      console.error("🔥 Missing Razorpay credentials");
-      return res.status(500).json({
-        message: "Payment gateway not configured",
-        error: "Missing Razorpay credentials",
-      });
-    }
 
     const order = await razorpay.orders.create({
       amount: plan.price * 100, // paise
